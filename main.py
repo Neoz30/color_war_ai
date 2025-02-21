@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+from ai import *
+
 import pyxel
 
 FPS = 60
