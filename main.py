@@ -238,16 +238,15 @@ while True:
             anim_step = board.draw(0)
             draw_mouse(team_playing)
             pyxel.flip()
-            c = 0
             while anim_step > 0:
                 pyxel.cls(0)
                 anim_step = board.draw(anim_step)
                 draw_mouse(team_playing)
                 pyxel.flip()
-                c += 1
 
+            end = not board.turn()
             remain = board.alive_team()
-            if not board.turn() or len(remain) < 2:
+            if end or len(remain) < 2:
                 break
 
     alive_team = board.alive_team()

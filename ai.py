@@ -1,5 +1,6 @@
 from random import randint, random
 
+
 class Node:
     def __init__(self):
         self.links = []
@@ -8,13 +9,14 @@ class Node:
         self.bias = 0
 
     def compute(self):
-        c = self.value*self.weight + self.bias
+        c = self.value * self.weight + self.bias
         for link in self.links:
             link.value += c
 
     def mutate(self):
         self.weight = randint(-10, 10)
         self.bias = randint(-10, 10)
+
 
 class Network:
     def __init__(self, inputs: int, outputs: int, hidden_layer: int, hidden_node: int):
@@ -32,7 +34,7 @@ class Network:
             for node in layer:
                 node.compute()
 
-    def mutate(self, luck: float[0: 1]):
+    def mutate(self, luck: float):
         layers = list(self.inputs) + self.hidden + list(self.outputs)
         for layer in layers:
             for node in layer:
