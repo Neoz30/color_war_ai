@@ -1,23 +1,19 @@
 from __future__ import annotations
-
 import math
-
-from ai import *
-
 import pyxel
 
 FPS = 60
 WINDOW_SIZE = (128, 128)
 
-pyxel.init(WINDOW_SIZE[0], WINDOW_SIZE[1], display_scale=4, fps=FPS)
+pyxel.init(WINDOW_SIZE[0], WINDOW_SIZE[1], display_scale=6, fps=FPS)
 
 pyxel.load("ressources.pyxres")
-# pyxel.playm(0, loop=True)
+pyxel.playm(0, loop=True)
 
 pyxel.mouse(False)
 
 TEX_RES = (16, 16)
-TEAM_COLOR = ((240, 240), (0, 0), (16, 0), (32, 0), (48, 0))
+TEAM_COLOR = ((0, 0), (16, 0), (32, 0), (48, 0))
 
 
 class Tile:
@@ -38,7 +34,7 @@ class Tile:
 
         pyxel.blt(
             pos[0], pos[1], 0,
-            TEAM_COLOR[self.team][0], TEAM_COLOR[self.team][1],
+            TEAM_COLOR[self.team - 1][0], TEAM_COLOR[self.team - 1][1],
             TEX_RES[0], TEX_RES[1],
             0
         )
@@ -84,7 +80,7 @@ class Board:
         for y in range(self.size[1]):
             for x in range(self.size[0]):
                 graphic_pos = self.pos_to_screen((x, y))
-                pyxel.blt(graphic_pos[0], graphic_pos[1], 0, 0, 32, TEX_RES[0], TEX_RES[1])
+                pyxel.blt(graphic_pos[0], graphic_pos[1], 0, 64, 0, TEX_RES[0], TEX_RES[1])
 
     def draw(self, anim_step: float, anim_time: float = 0.25) -> float:
         self.draw_back()
@@ -161,7 +157,7 @@ class Board:
 
 # Graphic function
 def draw_mouse(team):
-    pyxel.blt(pyxel.mouse_x, pyxel.mouse_y, 0, TEX_RES[0] * (team - 1), 16, TEX_RES[0], TEX_RES[1], 0)
+    pyxel.blt(pyxel.mouse_x, pyxel.mouse_y, 0, TEX_RES[0] * (team - 1), 32, TEX_RES[0], TEX_RES[1], 0)
 
 
 def team_winner(team: int):
@@ -182,13 +178,8 @@ def team_winner(team: int):
     of_x = len(show) * 4 // 2
     of_y = 2
 
-    pyxel.text(WINDOW_SIZE[0]//2 - of_x, 5 - of_y, show, team_color[team-1])
-    pyxel.text(WINDOW_SIZE[0]//2 - of_x, 4 - of_y, show, 7)
-
-
-def tie_end():
-    pyxel.text(54, 63, "Tie !", 13)
-    pyxel.text(54, 62, "Tie !", 7)
+    pyxel.text(WINDOW_SIZE[0] // 2 - of_x, 5 - of_y, show, team_color[team - 1])
+    pyxel.text(WINDOW_SIZE[0] // 2 - of_x, 4 - of_y, show, 7)
 
 
 board = Board((7, 7))
@@ -197,7 +188,7 @@ board = Board((7, 7))
 for i in range(4):
     x = board.size[0] - 2 if i & 1 else 1
     y = board.size[1] - 2 if i & 2 else 1
-    board.buffer[x][y].team = i+1
+    board.buffer[x][y].team = i + 1
     board.buffer[x][y].charge = 3
 board.turn()
 
@@ -250,17 +241,14 @@ while True:
                 break
 
     alive_team = board.alive_team()
-    # Stop if 1 team or 0 remain
-    if len(alive_team) < 2:
-        who_won = None if len(alive_team) == 0 else alive_team[0]
+    # Stop if 1 team
+    if len(alive_team) == 1:
+        who_won = alive_team[0]
         break
 
 # End loop
 while True:
     pyxel.cls(0)
     board.draw(0)
-    if who_won is None:
-        tie_end()
-    else:
-        team_winner(who_won)
+    team_winner(who_won)
     pyxel.flip()
