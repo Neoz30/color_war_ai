@@ -27,42 +27,45 @@ class Board:
             [Tile() for _ in range(lenght)] for _ in range(width)
         ]
 
-    def swap(self):
+    def copy_back_to_front(self):
         """
-        Swap the board and the buffer state
-        board become buffer and buffer become board
+        Copy back buffer to front buffer
         """
-        tmp = self.front
-        self.front = self.back
-        self.back = tmp
-        del tmp
+        for x in range(self.width):
+            for y in range(self.lenght):
+                self.front[x][y].pick(self.back[x][y])
 
-    def update(self, tile_x: int, tile_y: int):
+    def update_tile(self, tile_x: int, tile_y: int):
         tile = self.front[tile_x][tile_y]
-        if tile.team is None or tile.charge < 4:
-            pass
+        if tile.charge < 4:
             return
 
-        inc = tile.charge - 3  # Add the bomb chain bug
+        inc = tile.charge - 3
         for offset in ((0, 1), (1, 0), (0, -1), (-1, 0)):
             side_x, side_y = tile_x + offset[0], tile_y + offset[1]
             if not (0 <= side_x < self.width and 0 <= side_y < self.lenght):
                 continue
 
-            self.back[side_x][side_y].charge += inc
             self.back[side_x][side_y].team = tile.team
+            self.back[side_x][side_y].charge += inc
 
-        # Clear current tile
         self.back[tile_x][tile_y].team = None
         self.back[tile_x][tile_y].charge = 0
 
-    def turn(self):
+    def update(self):
         for y in range(self.lenght):
             for x in range(self.width):
-                self.update(x, y)
+                self.update_tile(x, y)
 
-        # Swap buffer and board (almost like copying it)
-        self.swap()
+        # Copy back to front
+        self.copy_back_to_front()
+
+    def has_4(self) -> bool:
+        for y in range(self.lenght):
+            for x in range(self.width):
+                if self.front[x][y].charge >= 4:
+                    return True
+        return False
 
     def alive_team(self) -> list:
         alive = []
@@ -122,19 +125,21 @@ class Graphic:
 
 class ColorWar:
     def __init__(self):
-        pyxel.init(128, 128, display_scale=6, fps=60)
+        pyxel.init(128, 128, display_scale=6, fps=240, title="Color War")
         pyxel.load("ressources.pyxres")
         pyxel.mouse(False)
 
         self.board = Board(7, 7)
-        self.gamestate = 0
-        self.team_alive = list(range(1, 5))
-        self.team_playing = 1
+        self.team_alive = list(range(4))
+        self.team_playing = 0
+        self.first = True
+        self.end = False
 
         self.graphic = Graphic(self.board)
 
         self.board.back[1][1].team = 0
         self.board.back[1][1].charge = 3
+        self.board.update()
 
         pyxel.run(self.update, self.draw)
 
@@ -152,18 +157,18 @@ class ColorWar:
 
     def update(self):
         tile_pos = self.get_mouse_input()
-        if tile_pos is not None:
-            self.board.back[tile_pos[0]][tile_pos[1]].team = 0
-            self.board.back[tile_pos[0]][tile_pos[1]].charge += 1
+        played = False
+        has_4 = self.board.has_4()
 
-        match self.gamestate:
-            case 0:
-                pass
-            case 1:
-                pass
-            case _:
-                pass
-        self.board.turn()
+        if tile_pos is not None and not has_4:
+            if self.board.front[tile_pos[0]][tile_pos[1]].team == self.team_playing or self.first:
+                self.board.back[tile_pos[0]][tile_pos[1]].team = 0
+                self.board.back[tile_pos[0]][tile_pos[1]].charge += 1
+                played = True
+
+        if played or has_4:
+            self.board.update()
+            self.first = False
 
     def draw(self):
         pyxel.cls(0)
