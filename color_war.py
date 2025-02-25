@@ -137,10 +137,6 @@ class ColorWar:
 
         self.graphic = Graphic(self.board)
 
-        self.board.back[1][1].team = 0
-        self.board.back[1][1].charge = 3
-        self.board.update()
-
         pyxel.run(self.update, self.draw)
 
     def get_mouse_input(self) -> None | tuple:
@@ -161,19 +157,28 @@ class ColorWar:
         has_4 = self.board.has_4()
 
         if tile_pos is not None and not has_4:
-            if self.board.front[tile_pos[0]][tile_pos[1]].team == self.team_playing or self.first:
-                self.board.back[tile_pos[0]][tile_pos[1]].team = 0
+            tile = self.board.front[tile_pos[0]][tile_pos[1]]
+
+            if self.first and tile.team is None:
+                self.board.back[tile_pos[0]][tile_pos[1]].team = self.team_playing
+                self.board.back[tile_pos[0]][tile_pos[1]].charge = 3
+                played = True
+
+            elif tile.team == self.team_playing:
+                self.board.back[tile_pos[0]][tile_pos[1]].team = self.team_playing
                 self.board.back[tile_pos[0]][tile_pos[1]].charge += 1
                 played = True
 
         if played or has_4:
             self.board.update()
-            self.first = False
+            if self.team_playing == 3:
+                self.first = False
+            self.team_playing = (self.team_playing + 1) % 4
 
     def draw(self):
         pyxel.cls(0)
         self.graphic.board_all()
-        self.graphic.mouse(0)
+        self.graphic.mouse(self.team_playing)
 
 
 ColorWar()
