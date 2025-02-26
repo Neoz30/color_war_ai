@@ -27,45 +27,56 @@ class Board:
             [Tile() for _ in range(lenght)] for _ in range(width)
         ]
 
+    def explode_tile(self, x: int, y: int):
+        tile = self.front[x][y]
+        power = tile.charge - 3
+
+        if x > 0:
+            self.back[x - 1][y].team = tile.team
+            self.back[x - 1][y].charge += power
+        if y > 0:
+            self.back[x][y - 1].team = tile.team
+            self.back[x][y - 1].charge += power
+        if x + 1 < self.width:
+            self.back[x + 1][y].team = tile.team
+            self.back[x + 1][y].charge += power
+        if y + 1 < self.lenght:
+            self.back[x][y + 1].team = tile.team
+            self.back[x][y + 1].charge += power
+
+        self.back[x][y].team = None
+        self.back[x][y].charge = 0
+
+    def copy_front_to_back(self):
+        for x in range(self.width):
+            for y in range(self.lenght):
+                self.back[x][y].pick(self.front[x][y])
+
     def copy_back_to_front(self):
-        """
-        Copy back buffer to front buffer
-        """
         for x in range(self.width):
             for y in range(self.lenght):
                 self.front[x][y].pick(self.back[x][y])
 
-    def update_tile(self, tile_x: int, tile_y: int):
-        tile = self.front[tile_x][tile_y]
-        if tile.charge < 4:
-            return
+    def check_tiles(self, tiles_pos: set[tuple]) -> set:
+        self.copy_front_to_back()
 
-        inc = tile.charge - 3
-        for offset in ((0, 1), (1, 0), (0, -1), (-1, 0)):
-            side_x, side_y = tile_x + offset[0], tile_y + offset[1]
-            if not (0 <= side_x < self.width and 0 <= side_y < self.lenght):
+        update = set()
+        for tile_pos in tiles_pos:
+            x, y = tile_pos
+            if self.front[x][y].charge < 4:
                 continue
+            self.explode_tile(x, y)
+            if x > 0:
+                update.add((x - 1, y))
+            if y > 0:
+                update.add((x, y - 1))
+            if x + 1 < self.width:
+                update.add((x + 1, y))
+            if y + 1 < self.lenght:
+                update.add((x, y + 1))
 
-            self.back[side_x][side_y].team = tile.team
-            self.back[side_x][side_y].charge += inc
-
-        self.back[tile_x][tile_y].team = None
-        self.back[tile_x][tile_y].charge = 0
-
-    def update(self):
-        for y in range(self.lenght):
-            for x in range(self.width):
-                self.update_tile(x, y)
-
-        # Copy back to front
         self.copy_back_to_front()
-
-    def has_4(self) -> bool:
-        for y in range(self.lenght):
-            for x in range(self.width):
-                if self.front[x][y].charge >= 4:
-                    return True
-        return False
+        return update
 
     def alive_team(self) -> list:
         alive = []
@@ -89,7 +100,7 @@ class Graphic:
             (pyxel.height - board.lenght * self.tex_size) // 2
         )
 
-    def mouse(self, team):
+    def mouse(self, team: int):
         pyxel.blt(
             pyxel.mouse_x, pyxel.mouse_y, 0,
             self.tex_size * team, 32, self.tex_size, self.tex_size,
@@ -130,10 +141,13 @@ class ColorWar:
         pyxel.mouse(False)
 
         self.board = Board(7, 7)
+        self.update_table = set()
+
         self.team_alive = list(range(4))
         self.team_playing = 0
         self.first = True
         self.end = False
+        self.played = False
 
         self.graphic = Graphic(self.board)
 
@@ -153,27 +167,27 @@ class ColorWar:
 
     def update(self):
         tile_pos = self.get_mouse_input()
-        played = False
-        has_4 = self.board.has_4()
+        must_update = len(self.update_table) > 0
 
-        if tile_pos is not None and not has_4:
+        if tile_pos is not None and not must_update:
             tile = self.board.front[tile_pos[0]][tile_pos[1]]
 
             if self.first and tile.team is None:
-                self.board.back[tile_pos[0]][tile_pos[1]].team = self.team_playing
-                self.board.back[tile_pos[0]][tile_pos[1]].charge = 3
-                played = True
+                self.board.front[tile_pos[0]][tile_pos[1]].team = self.team_playing
+                self.board.front[tile_pos[0]][tile_pos[1]].charge = 3
+                self.update_table.add(tile_pos)
+                self.team_playing = (self.team_playing + 1) % 4
 
-            elif tile.team == self.team_playing:
-                self.board.back[tile_pos[0]][tile_pos[1]].team = self.team_playing
-                self.board.back[tile_pos[0]][tile_pos[1]].charge += 1
-                played = True
+            elif tile.team == self.team_playing or True:
+                self.board.front[tile_pos[0]][tile_pos[1]].team = self.team_playing
+                self.board.front[tile_pos[0]][tile_pos[1]].charge += 1
+                self.update_table.add(tile_pos)
+                self.team_playing = (self.team_playing + 1) % 4
 
-        if played or has_4:
-            self.board.update()
+        if must_update:
+            self.update_table = self.board.check_tiles(self.update_table)
             if self.team_playing == 3:
                 self.first = False
-            self.team_playing = (self.team_playing + 1) % 4
 
     def draw(self):
         pyxel.cls(0)
