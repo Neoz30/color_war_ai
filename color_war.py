@@ -129,10 +129,19 @@ class Graphic:
                 self.tile_back(pos_x, pos_y)
                 self.tile_content(pos_x, pos_y, x, y)
 
+    def win_text(self, team: int):
+        color = (14, 6, 11, 10)[team]
+        team_text = ("Red", "Blue", "Green", "Yellow")[team]
+
+        x = (pyxel.width - 4*len(team_text) - 22) // 2
+        y = self.offset[1] - 8
+        pyxel.text(x, y + 1, team_text + " win !", color)
+        pyxel.text(x, y, team_text + " win !", 7)
+
 
 class ColorWar:
     def __init__(self):
-        pyxel.init(128, 128, display_scale=6, fps=240, title="Color War")
+        pyxel.init(128, 128, display_scale=6, fps=75, title="Color War")
         pyxel.load("ressources.pyxres")
         pyxel.mouse(False)
 
@@ -186,10 +195,15 @@ class ColorWar:
         return True
 
     def update(self):
+        if self.end:
+            return
+
         if len(self.update_table) > 0:
             self.update_table = self.board.check_tiles(self.update_table)
             if not self.first:
                 self.team_alive = self.board.alive_team()
+            if len(self.team_alive) < 2:
+                self.end = True
             return
 
         nb_team = len(self.team_alive)
@@ -208,6 +222,9 @@ class ColorWar:
         pyxel.cls(0)
         self.graphic.board_all()
         self.graphic.mouse(self.team_playing)
+
+        if self.end:
+            self.graphic.win_text(self.team_playing)
 
 
 ColorWar()
