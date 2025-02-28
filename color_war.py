@@ -86,7 +86,8 @@ class Board:
 
 
 class Graphic:
-    def __init__(self, board: Board):
+    def __init__(self, board: Board, fps: int):
+        self.fps = fps
         self.tex_size = 16
         self.team_uv = ((0, 0), (16, 0), (32, 0), (48, 0))
 
@@ -95,6 +96,10 @@ class Graphic:
             (pyxel.width - board.width * self.tex_size) // 2,
             (pyxel.height - board.lenght * self.tex_size) // 2
         )
+
+        self.animation = False
+        self.duration = 0.25 * fps
+        self.time = 0
 
     def mouse(self, team: int):
         pyxel.blt(
@@ -106,8 +111,7 @@ class Graphic:
     def tile_back(self, pos_x: int | float, pos_y: int | float):
         pyxel.blt(pos_x, pos_y, 0, 64, 0, self.tex_size, self.tex_size)
 
-    def tile_content(self, pos_x: int | float, pos_y: int | float, tile_x: int, tile_y: int):
-        tile = self.board.front[tile_x][tile_y]
+    def tile_content(self, pos_x: int | float, pos_y: int | float, tile: Tile):
         if tile.team is None:
             return
 
@@ -127,7 +131,47 @@ class Graphic:
             for x in range(self.board.width):
                 pos_x, pos_y = x * self.tex_size + self.offset[0], y * self.tex_size + self.offset[1]
                 self.tile_back(pos_x, pos_y)
-                self.tile_content(pos_x, pos_y, x, y)
+                self.tile_content(pos_x, pos_y, self.board.front[x][y])
+
+    def board_animate(self):
+        for y in range(self.board.lenght):
+            for x in range(self.board.width):
+                gx, gy = x * self.tex_size + self.offset[0], y * self.tex_size + self.offset[1]
+                self.tile_back(gx, gy)
+
+        self.time += 1
+        t = self.time / self.duration
+        offset = (2*t - t*t) * self.tex_size
+        for y in range(self.board.lenght):
+            for x in range(self.board.width):
+                gx, gy = x * self.tex_size + self.offset[0], y * self.tex_size + self.offset[1]
+                tile = self.board.front[x][y]
+                if tile.charge < 4:
+                    self.tile_content(gx, gy, tile)
+                    continue
+
+                clone = self.board.front[x][y].copy()
+                clone.charge = tile.charge - 3
+                if x > 0:
+                    self.tile_content(gx - offset, gy, clone)
+                if y > 0:
+                    self.tile_content(gx, gy - offset, clone)
+                if x + 1 < self.board.width:
+                    self.tile_content(gx + offset, gy, clone)
+                if y + 1 < self.board.lenght:
+                    self.tile_content(gx, gy + offset, clone)
+                del clone, tile
+
+        if self.time >= self.duration:
+            self.animation = False
+            self.time = 0
+
+    def board_has_4(self) -> bool:
+        for y in range(self.board.lenght):
+            for x in range(self.board.width):
+                if self.board.front[x][y].charge >= 4:
+                    return True
+        return False
 
     def win_text(self, team: int):
         color = (14, 6, 11, 10)[team]
@@ -141,7 +185,8 @@ class Graphic:
 
 class ColorWar:
     def __init__(self):
-        pyxel.init(128, 128, display_scale=6, fps=75, title="Color War")
+        fps = 75
+        pyxel.init(128, 128, display_scale=6, fps=fps, title="Color War")
         pyxel.load("ressources.pyxres")
         pyxel.mouse(False)
 
@@ -155,7 +200,7 @@ class ColorWar:
         self.first = True
         self.end = False
 
-        self.graphic = Graphic(self.board)
+        self.graphic = Graphic(self.board, fps)
 
         pyxel.run(self.update, self.draw)
 
@@ -195,7 +240,7 @@ class ColorWar:
         return True
 
     def update(self):
-        if self.end:
+        if self.end or self.graphic.animation:
             return
 
         if len(self.update_table) > 0:
@@ -220,9 +265,14 @@ class ColorWar:
 
     def draw(self):
         pyxel.cls(0)
-        self.graphic.board_all()
-        self.graphic.mouse(self.team_playing)
 
+        if self.graphic.animation and not self.end:
+            self.graphic.board_animate()
+        else:
+            self.graphic.board_all()
+            self.graphic.animation = self.graphic.board_has_4()
+
+        self.graphic.mouse(self.team_playing)
         if self.end:
             self.graphic.win_text(self.team_playing)
 
