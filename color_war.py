@@ -79,14 +79,10 @@ class Board:
         return update
 
     def alive_team(self) -> list:
-        alive = []
-        for y in range(self.lenght):
-            for x in range(self.width):
-                tile = self.front[x][y]
-                if tile.team is None or tile.team in alive:
-                    continue
-                alive.append(tile.team)
-        return sorted(alive)
+        alive = set(self.front[x][y].team for x in range(self.width) for y in range(self.lenght))
+        if None in alive:
+            alive.remove(None)
+        return sorted(list(alive))
 
 
 class Graphic:
@@ -145,9 +141,10 @@ class ColorWar:
 
         self.team_alive = list(range(4))
         self.team_playing = 0
+        self.team_index = 0  # misleading
+
         self.first = True
         self.end = False
-        self.played = False
 
         self.graphic = Graphic(self.board)
 
@@ -165,29 +162,47 @@ class ColorWar:
 
         return tile_x, tile_y
 
+    def play_on(self, x: int, y: int) -> bool:
+        """
+        Play on tile with the current team and gamestate
+        :param x: position X on the board
+        :param y: position Y on the board
+        :return: move validity
+        """
+
+        tile = self.board.front[x][y]
+
+        tile_camp = 2  # 0: ally, 1: neutral, 2: enemy
+        if tile.team is None:
+            tile_camp = 1
+        elif tile.team == self.team_playing:
+            tile_camp = 0
+
+        if not self.first and tile_camp == 1 or tile_camp == 2:
+            return False
+
+        tile.team = self.team_playing
+        tile.charge = 3 if self.first else tile.charge + 1
+        return True
+
     def update(self):
-        tile_pos = self.get_mouse_input()
-        must_update = len(self.update_table) > 0
-
-        if tile_pos is not None and not must_update:
-            tile = self.board.front[tile_pos[0]][tile_pos[1]]
-
-            if self.first and tile.team is None:
-                self.board.front[tile_pos[0]][tile_pos[1]].team = self.team_playing
-                self.board.front[tile_pos[0]][tile_pos[1]].charge = 3
-                self.update_table.add(tile_pos)
-                self.team_playing = (self.team_playing + 1) % 4
-
-            elif tile.team == self.team_playing or True:
-                self.board.front[tile_pos[0]][tile_pos[1]].team = self.team_playing
-                self.board.front[tile_pos[0]][tile_pos[1]].charge += 1
-                self.update_table.add(tile_pos)
-                self.team_playing = (self.team_playing + 1) % 4
-
-        if must_update:
+        if len(self.update_table) > 0:
             self.update_table = self.board.check_tiles(self.update_table)
+            if not self.first:
+                self.team_alive = self.board.alive_team()
+            return
+
+        nb_team = len(self.team_alive)
+        self.team_index %= nb_team
+        self.team_playing = self.team_alive[self.team_index]
+        tile_pos = self.get_mouse_input()
+
+        if tile_pos is not None and self.play_on(*tile_pos):
+            self.update_table.add(tile_pos)
+
             if self.team_playing == 3:
                 self.first = False
+            self.team_index += 1
 
     def draw(self):
         pyxel.cls(0)
