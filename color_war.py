@@ -1,10 +1,12 @@
 from __future__ import annotations
-
+from random import shuffle
+from game.player import *
+from game.team import Team
 import pyxel
 
 
 class Tile:
-    def __init__(self, team: int | None = None, charge: int = 0):
+    def __init__(self, team: Team = Team.Neutral, charge: int = 0):
         self.team = team
         self.charge = charge
 
@@ -44,7 +46,7 @@ class Board:
             self.back[x][y + 1].team = tile.team
             self.back[x][y + 1].charge += power
 
-        self.back[x][y].team = None
+        self.back[x][y].team = Team.Neutral
         self.back[x][y].charge = 0
 
     def copy_front_to_back(self):
@@ -78,11 +80,12 @@ class Board:
         self.copy_back_to_front()
         return update
 
-    def alive_team(self) -> list:
-        alive = set(self.front[x][y].team for x in range(self.width) for y in range(self.lenght))
-        if None in alive:
-            alive.remove(None)
-        return sorted(list(alive))
+    def alive_team(self) -> Team:
+        alive = Team.Neutral
+        for y in range(self.lenght):
+            for x in range(self.width):
+                alive |= self.front[x][y].team
+        return alive & Team.playable
 
 
 class Graphic:
@@ -101,10 +104,16 @@ class Graphic:
         self.duration = 0.25 * fps
         self.time = 0
 
-    def mouse(self, team: int):
+    def mouse(self, team: Team):
+        iteam = -1
+        match team:
+            case Team.Red: iteam = 0
+            case Team.Blue: iteam = 1
+            case Team.Green: iteam = 2
+            case Team.Yellow: iteam = 3
         pyxel.blt(
             pyxel.mouse_x, pyxel.mouse_y, 0,
-            self.tex_size * team, 32, self.tex_size, self.tex_size,
+            self.tex_size * iteam, 32, self.tex_size, self.tex_size,
             0
         )
 
@@ -112,12 +121,18 @@ class Graphic:
         pyxel.blt(pos_x, pos_y, 0, 64, 0, self.tex_size, self.tex_size)
 
     def tile_content(self, pos_x: int | float, pos_y: int | float, tile: Tile):
-        if tile.team is None:
+        if tile.team == Team.Neutral:
             return
+        iteam = -1
+        match tile.team:
+            case Team.Red: iteam = 0
+            case Team.Blue: iteam = 1
+            case Team.Green: iteam = 2
+            case Team.Yellow: iteam = 3
 
         pyxel.blt(
             pos_x, pos_y, 0,
-            self.team_uv[tile.team][0], self.team_uv[tile.team][1],
+            self.team_uv[iteam][0], self.team_uv[iteam][1],
             self.tex_size, self.tex_size,
             0
         )
@@ -141,7 +156,7 @@ class Graphic:
 
         self.time += 1
         t = self.time / self.duration
-        offset = (2*t - t*t) * self.tex_size
+        offset = (2 * t - t * t) * self.tex_size
         for y in range(self.board.lenght):
             for x in range(self.board.width):
                 gx, gy = x * self.tex_size + self.offset[0], y * self.tex_size + self.offset[1]
@@ -173,11 +188,17 @@ class Graphic:
                     return True
         return False
 
-    def win_text(self, team: int):
-        color = (14, 6, 11, 10)[team]
-        team_text = ("Red", "Blue", "Green", "Yellow")[team]
+    def win_text(self, team: Team):
+        iteam = -1
+        match team:
+            case Team.Red: iteam = 0
+            case Team.Blue: iteam = 1
+            case Team.Green: iteam = 2
+            case Team.Yellow: iteam = 3
+        color = (14, 6, 11, 10)[iteam]
+        team_text = ("Red", "Blue", "Green", "Yellow")[iteam]
 
-        x = (pyxel.width - 4*len(team_text) - 22) // 2
+        x = (pyxel.width - 4 * len(team_text) - 22) // 2
         y = self.offset[1] - 8
         pyxel.text(x, y + 1, team_text + " win !", color)
         pyxel.text(x, y, team_text + " win !", 7)
@@ -193,14 +214,19 @@ class ColorWar:
         self.board = Board(7, 7)
         self.update_table = set()
 
-        self.team_alive = list(range(4))
-        self.team_playing = 0
-        self.team_index = 0  # misleading
+        self.turn_order = list(Team.Green | Team.Blue)
+        shuffle(self.turn_order)
+        self.team_alive = Team.playable
+        self.team_playing: Team = self.turn_order[0]
+        self.team_index = 0  # index of turn order
 
         self.first = True
         self.end = False
 
         self.graphic = Graphic(self.board, fps)
+
+        # AI control
+        self.ai_training = False
 
         pyxel.run(self.update, self.draw)
 
@@ -216,6 +242,13 @@ class ColorWar:
 
         return tile_x, tile_y
 
+    def get_action_input(self, action: list | tuple) -> None | tuple:
+        best = (0, action[0])
+        for value in enumerate(action[1:], start=1):
+            if value[1] > best[1]:
+                best = value
+        return best[0] // self.board.width, best[0] % self.board.width
+
     def play_on(self, x: int, y: int) -> bool:
         """
         Play on tile with the current team and gamestate
@@ -227,7 +260,7 @@ class ColorWar:
         tile = self.board.front[x][y]
 
         tile_camp = 2  # 0: ally, 1: neutral, 2: enemy
-        if tile.team is None:
+        if tile.team == Team.Neutral:
             tile_camp = 1
         elif tile.team == self.team_playing:
             tile_camp = 0
@@ -249,19 +282,21 @@ class ColorWar:
                 self.team_alive = self.board.alive_team()
             if len(self.team_alive) < 2:
                 self.end = True
+            if len(self.update_table) == 0:
+                self.team_index = (self.team_index + 1) % len(self.turn_order)
+                self.team_playing = self.turn_order[self.team_index]
             return
 
-        nb_team = len(self.team_alive)
-        self.team_index %= nb_team
-        self.team_playing = self.team_alive[self.team_index]
-        tile_pos = self.get_mouse_input()
+        if self.team_playing not in self.team_alive:
+            self.team_index = (self.team_index + 1) % len(self.turn_order)
+            self.team_playing = self.turn_order[self.team_index]
 
+        tile_pos = self.get_mouse_input()
         if tile_pos is not None and self.play_on(*tile_pos):
             self.update_table.add(tile_pos)
 
-            if self.team_playing == 3:
+            if self.team_playing == self.turn_order[-1]:
                 self.first = False
-            self.team_index += 1
 
     def draw(self):
         pyxel.cls(0)
