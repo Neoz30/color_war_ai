@@ -1,7 +1,7 @@
 from __future__ import annotations
 from random import shuffle
-from game.player import *
-from game.team import Team
+from player import *
+from team import Team
 import pyxel
 
 

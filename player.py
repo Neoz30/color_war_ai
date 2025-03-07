@@ -1,4 +1,4 @@
-from game.team import Team
+from team import Team
 
 
 class Player:
