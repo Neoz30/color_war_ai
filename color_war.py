@@ -22,50 +22,45 @@ class Board:
     def __init__(self, width: int, lenght: int):
         self.width, self.lenght = width, lenght
 
-        self.front = [
-            [Tile() for _ in range(lenght)] for _ in range(width)
-        ]
-        self.back = [
+        self.tiles = [
             [Tile() for _ in range(lenght)] for _ in range(width)
         ]
 
     def explode_tile(self, x: int, y: int):
-        tile = self.front[x][y]
+        tile = self.tiles[x][y]
         power = tile.charge - 3
 
         if x > 0:
-            self.back[x - 1][y].team = tile.team
-            self.back[x - 1][y].charge += power
+            self.tiles[x - 1][y].team = tile.team
+            self.tiles[x - 1][y].charge += power
         if y > 0:
-            self.back[x][y - 1].team = tile.team
-            self.back[x][y - 1].charge += power
+            self.tiles[x][y - 1].team = tile.team
+            self.tiles[x][y - 1].charge += power
         if x + 1 < self.width:
-            self.back[x + 1][y].team = tile.team
-            self.back[x + 1][y].charge += power
+            self.tiles[x + 1][y].team = tile.team
+            self.tiles[x + 1][y].charge += power
         if y + 1 < self.lenght:
-            self.back[x][y + 1].team = tile.team
-            self.back[x][y + 1].charge += power
+            self.tiles[x][y + 1].team = tile.team
+            self.tiles[x][y + 1].charge += power
 
-        self.back[x][y].team = Team.Neutral
-        self.back[x][y].charge = 0
+        self.tiles[x][y].team = Team.Neutral
+        self.tiles[x][y].charge = 0
 
     def copy_front_to_back(self):
         for x in range(self.width):
             for y in range(self.lenght):
-                self.back[x][y].pick(self.front[x][y])
+                self.tiles[x][y].pick(self.tiles[x][y])
 
     def copy_back_to_front(self):
         for x in range(self.width):
             for y in range(self.lenght):
-                self.front[x][y].pick(self.back[x][y])
+                self.tiles[x][y].pick(self.tiles[x][y])
 
     def check_tiles(self, tiles_pos: set[tuple]) -> set:
-        self.copy_front_to_back()
-
         update = set()
         for tile_pos in tiles_pos:
             x, y = tile_pos
-            if self.front[x][y].charge < 4:
+            if self.tiles[x][y].charge < 4:
                 continue
             self.explode_tile(x, y)
             if x > 0:
@@ -76,15 +71,13 @@ class Board:
                 update.add((x + 1, y))
             if y + 1 < self.lenght:
                 update.add((x, y + 1))
-
-        self.copy_back_to_front()
         return update
 
     def alive_team(self) -> Team:
         alive = Team.Neutral
         for y in range(self.lenght):
             for x in range(self.width):
-                alive |= self.front[x][y].team
+                alive |= self.tiles[x][y].team
         return alive & Team.playable
 
 
@@ -146,7 +139,7 @@ class Graphic:
             for x in range(self.board.width):
                 pos_x, pos_y = x * self.tex_size + self.offset[0], y * self.tex_size + self.offset[1]
                 self.tile_back(pos_x, pos_y)
-                self.tile_content(pos_x, pos_y, self.board.front[x][y])
+                self.tile_content(pos_x, pos_y, self.board.tiles[x][y])
 
     def board_animate(self):
         for y in range(self.board.lenght):
@@ -160,12 +153,12 @@ class Graphic:
         for y in range(self.board.lenght):
             for x in range(self.board.width):
                 gx, gy = x * self.tex_size + self.offset[0], y * self.tex_size + self.offset[1]
-                tile = self.board.front[x][y]
+                tile = self.board.tiles[x][y]
                 if tile.charge < 4:
                     self.tile_content(gx, gy, tile)
                     continue
 
-                clone = self.board.front[x][y].copy()
+                clone = self.board.tiles[x][y].copy()
                 clone.charge = tile.charge - 3
                 if x > 0:
                     self.tile_content(gx - offset, gy, clone)
@@ -184,7 +177,7 @@ class Graphic:
     def board_has_4(self) -> bool:
         for y in range(self.board.lenght):
             for x in range(self.board.width):
-                if self.board.front[x][y].charge >= 4:
+                if self.board.tiles[x][y].charge >= 4:
                     return True
         return False
 
@@ -214,7 +207,7 @@ class ColorWar:
         self.board = Board(7, 7)
         self.update_table = set()
 
-        self.turn_order = list(Team.Green | Team.Blue)
+        self.turn_order = list(Team.playable)
         shuffle(self.turn_order)
         self.team_alive = Team.playable
         self.team_playing: Team = self.turn_order[0]
@@ -228,6 +221,7 @@ class ColorWar:
         # AI control
         self.ai_training = False
 
+        # pyxel.playm(0, loop=True)
         pyxel.run(self.update, self.draw)
 
     def get_mouse_input(self) -> None | tuple:
@@ -257,7 +251,7 @@ class ColorWar:
         :return: move validity
         """
 
-        tile = self.board.front[x][y]
+        tile = self.board.tiles[x][y]
 
         tile_camp = 2  # 0: ally, 1: neutral, 2: enemy
         if tile.team == Team.Neutral:
