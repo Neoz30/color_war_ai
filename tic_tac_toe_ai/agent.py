@@ -1,6 +1,5 @@
 import torch
 import random
-import numpy as np
 import math
 from collections import deque
 from tic_tac_toe import Game, Shape
@@ -10,7 +9,7 @@ MAX_MEMORY = 1000
 BATCH_SIZE = 100
 LR = 0.1
 
-INF = math.inf
+Tensor = torch.Tensor
 
 
 def random_move(game: Game):
@@ -32,8 +31,8 @@ class Agent:
         self.model = Linear_QNet(9, 36, 9)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
 
-    def get_state(self, game):
-        state = np.zeros(9, int)
+    def get_state(self, game) -> Tensor:
+        state = torch.zeros(9, dtype=torch.float)
         for i in range(9):
             s = game.grid[i // 3][i % 3]
             match s:
@@ -43,7 +42,7 @@ class Agent:
                     state[i] = -1
         return state
 
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state: Tensor, action: Tensor, reward: int, next_state: Tensor, done: bool):
         self.memory.append((state, action, reward, next_state, done))  # popleft if MAX_MEMORY is reached
 
     def train_long_memory(self):
@@ -55,38 +54,37 @@ class Agent:
         states, actions, rewards, next_states, dones = zip(*mini_sample)
         self.trainer.train_step(states, actions, rewards, next_states, dones)
 
-    def train_short_memory(self, state, action, reward, next_state, done):
-        self.trainer.train_step(state, action, reward, next_state, done)
+    def train_short_memory(self, state: Tensor, action: Tensor, reward: int, next_state: Tensor, done: bool):
+        self.trainer.train_step(state, action, Tensor(reward), next_state, Tensor((done, )))
 
-    def get_action(self, state):
-        # random moves: tradeoff exploration / exploitation
-        self.epsilon = 1000 - self.n_games
+    def get_action(self, state: Tensor) -> Tensor:
         final_move = [0 for _ in range(9)]
-        if random.randint(0, 100) < self.epsilon:
-            moves = []
-            for v in range(9):
-                if state[v] == 0:
-                    moves.append(v)
-            final_move[random.choice(moves)] = 1
-        else:
-            state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)
-            for imove, move in enumerate(prediction):
-                if state0[imove] != 0:
-                    prediction[imove] = 0
+        prediction = self.model(state)
+        for imove, move in enumerate(prediction):
+            if state[imove] != 0:
+                prediction[imove] = 0
 
-            move = torch.argmax(prediction).item()
-            final_move[move] = 1
+        s = 0
+        move = 0
+        total = sum(prediction)
+        r = random.random() * total
+        for i, trust in enumerate(prediction):
+            if s <= r < s + trust:
+                move = i
+                break
+            s += trust
+        final_move[move] = 1
 
-        return final_move
+        return Tensor(final_move)
 
 
 def train():
     print("Init")
     shapes = (Shape.Cross, Shape.Circle)
     agents = (Agent(), Agent())
+    ag1, ag2 = agents
+
     total_reward = [0, 0]
-    best_reward = [0, 0]
     game = Game()
     print("Start")
 
@@ -94,7 +92,6 @@ def train():
     while True:
         for i_shape, shape in enumerate(shapes):
             agent = agents[i_shape]
-            # game.print_grid()
 
             if agent is None:
                 game.play(random_move(game), shape)
@@ -107,11 +104,7 @@ def train():
             final_move = agent.get_action(state_old)
 
             # perform move and get new state
-            mi = 0
-            for i in range(1, len(final_move)):
-                if final_move[mi] < final_move[i]:
-                    mi = i
-            reward, done = game.play(mi, shape)
+            reward, done = game.play(torch.argmax(final_move).item(), shape)
             state_new = agent.get_state(game)
 
             # train short memory
@@ -133,14 +126,12 @@ def train():
                 agent.n_games += 1
                 agent.train_long_memory()
 
-                if total_reward[i] > best_reward[i]:
-                    best_reward[i] = total_reward[i]
-                    agent.model.save(f"model{i}.pth")
-
-            print('Game', agents[0].n_games, 'Reward', total_reward, 'Best:', best_reward)
+            print('Game', agents[0].n_games, 'Reward', total_reward)
             total_reward = [0, 0]
 
         if agents[0].n_games > 2000:
+            ag1.model.save(f"model_ag1.pth")
+            ag2.model.save(f"model_ag2.pth")
             break
 
 

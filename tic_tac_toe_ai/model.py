@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import os
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+Tensor = torch.Tensor
 
 
 class Linear_QNet(nn.Module):
@@ -14,15 +14,14 @@ class Linear_QNet(nn.Module):
         self.input = nn.Linear(input_size, hidden_size)
         self.middle = nn.Linear(hidden_size, hidden_size)
         self.output = nn.Linear(hidden_size, output_size)
-        self.to(device)
 
     def forward(self, x):
-        x = F.relu(self.input(x.to(device)))
+        x = F.relu(self.input(x))
         x = F.relu(self.middle(x))
         x = F.sigmoid(self.output(x))
         return x
 
-    def save(self, file_name='model_long1400.pth'):
+    def save(self, file_name='model.pth'):
         model_folder_path = './model'
         if not os.path.exists(model_folder_path):
             os.makedirs(model_folder_path)
@@ -39,20 +38,15 @@ class QTrainer:
         self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
         self.criterion = nn.MSELoss()
 
-    def train_step(self, state, action, reward, next_state, done):
-        state = torch.tensor(state, dtype=torch.float)
-        next_state = torch.tensor(next_state, dtype=torch.float)
-        action = torch.tensor(action, dtype=torch.long)
-        reward = torch.tensor(reward, dtype=torch.float)
+    def train_step(self, state: Tensor, action: Tensor, reward: Tensor, next_state: Tensor, done: Tensor):
         # (n, x)
-
         if len(state.shape) == 1:
             # (1, x)
             state = torch.unsqueeze(state, 0)
             next_state = torch.unsqueeze(next_state, 0)
             action = torch.unsqueeze(action, 0)
             reward = torch.unsqueeze(reward, 0)
-            done = (done,)
+            done = torch.unsqueeze(done, 0)
 
         # 1: predicted Q values with current state
         pred = self.model(state)

@@ -16,7 +16,7 @@ def play_human() -> int:
 
 def play_AI(agent: Agent, game: Game, shape) -> int:
     moves = agent.get_action(
-        agent.get_state(game, shape)
+        agent.get_state(game)
     )
     mi = 0
     for i in range(1, len(moves)):
@@ -29,40 +29,35 @@ game = Game()
 shapes = (Shape.Cross, Shape.Circle)
 
 ai = Agent()
-ai.model.load_state_dict(torch.load("model/model.pth"))
+ai.model.load_state_dict(torch.load("model/model.pth", map_location=torch.device('cpu')))
 human = None
 
-win = 0
-for party in range(10):
-    players = [human, ai]
-    if random.randint(0, 1):
-        players = players[1], players[0]
-    game_over = False
-    game.reset()
-    while True:
-        for i_sh, shape in enumerate(shapes):
-            player = players[i_sh]
-            game.print_grid()
+players = [human, ai]
+if random.randint(0, 1):
+    players = players[1], players[0]
+game_over = False
+game.reset()
+while True:
+    for i_sh, shape in enumerate(shapes):
+        player = players[i_sh]
+        game.print_grid()
 
-            if isinstance(player, Agent):
-                game_over = game.play(play_AI(player, game, shape), shape)[1]
-            else:
+        if isinstance(player, Agent):
+            game_over = game.play(play_AI(player, game, shape), shape)[1]
+        else:
+            pos = play_human()
+            while game.grid[pos // 3][pos % 3] != Shape.Empty:
                 pos = play_human()
-                while game.grid[pos // 3][pos % 3] != Shape.Empty:
-                    pos = play_human()
-                game_over = game.play(pos, shape)[1]
-
-            if game_over:
-                break
+            game_over = game.play(pos, shape)[1]
 
         if game_over:
-            game.print_grid()
-            winner = game.verify()
-            if winner == Shape.Empty:
-                print("Tie")
-            else:
-                print(winner.name, "win !")
-            if player is human:
-                win += 1
-            print("Party:", party+1, "You won:", win)
             break
+
+    if game_over:
+        game.print_grid()
+        winner = game.verify()
+        if winner == Shape.Empty:
+            print("Tie")
+        else:
+            print(winner.name, "win !")
+        break
