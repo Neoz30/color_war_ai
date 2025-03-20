@@ -14,9 +14,9 @@ def play_human() -> int:
     return pos[0] + pos[1] * 3
 
 
-def play_AI(agent: Agent, game: Game, shape) -> int:
+def play_AI(agent: Agent, game: Game) -> int:
     moves = agent.get_action(
-        agent.get_state(game, shape)
+        agent.get_state(game)
     )
     mi = 0
     for i in range(1, len(moves)):
@@ -29,7 +29,7 @@ game = Game()
 shapes = (Shape.Cross, Shape.Circle)
 
 ai = Agent()
-ai.model.load_state_dict(torch.load("model/model.pth"))
+ai.model.load_state_dict(torch.load("model/model_ag2.pth"))
 human = None
 
 win = 0
@@ -45,10 +45,10 @@ for party in range(10):
             game.print_grid()
 
             if isinstance(player, Agent):
-                game_over = game.play(play_AI(player, game, shape), shape)[1]
+                game_over = game.play(play_AI(player, game), shape)[1]
             else:
                 pos = play_human()
-                while game.grid[pos // 3][pos % 3] != Shape.Empty:
+                while game.grid[pos] != Shape.Empty:
                     pos = play_human()
                 game_over = game.play(pos, shape)[1]
 

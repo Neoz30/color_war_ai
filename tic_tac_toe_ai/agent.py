@@ -1,25 +1,34 @@
 import torch
 import random
-import numpy as np
 import math
 from collections import deque
 from tic_tac_toe import Game, Shape
 from model import Linear_QNet, QTrainer
+import matplotlib.pyplot as plt
+from copy import deepcopy
 
-MAX_MEMORY = 1000
-BATCH_SIZE = 100
-LR = 0.1
+MAX_MEMORY = 200
+LR = 0.05
 
 INF = math.inf
 
 
-def random_move(game: Game):
+def argmax(tab: tuple | list) -> int:
+    mi = 0
+    for i in range(1, len(tab)):
+        if tab[mi] < tab[i]:
+            mi = i
+    return mi
+
+
+def random_move(game: Game) -> list:
     moves = []
-    for x in range(3):
-        for y in range(3):
-            if game.grid[y][x] == Shape.Empty:
-                moves.append(3 * y + x)
-    return random.choice(moves)
+    for i in range(9):
+        if game.grid[i] == Shape.Empty:
+            moves.append(i)
+    final_move = [0 for _ in range(9)]
+    final_move[random.choice(moves)] = 1
+    return final_move
 
 
 class Agent:
@@ -32,51 +41,38 @@ class Agent:
         self.model = Linear_QNet(9, 36, 9)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
 
-    def get_state(self, game):
-        state = np.zeros(9, int)
-        for i in range(9):
-            s = game.grid[i // 3][i % 3]
-            match s:
-                case Shape.Cross:
-                    state[i] = 1
-                case Shape.Circle:
-                    state[i] = -1
-        return state
+    def get_state(self, game: Game) -> tuple:
+        return tuple(shape.value for shape in game.grid)
 
-    def remember(self, state, action, reward, next_state, done):
+    def remember(self, state: tuple, action: list, reward: int, next_state: tuple, done: bool):
         self.memory.append((state, action, reward, next_state, done))  # popleft if MAX_MEMORY is reached
 
     def train_long_memory(self):
-        if len(self.memory) > BATCH_SIZE:
-            mini_sample = random.sample(self.memory, BATCH_SIZE)  # list of tuples
-        else:
-            mini_sample = self.memory
-
+        random.shuffle(self.memory)
+        mini_sample = self.memory
         states, actions, rewards, next_states, dones = zip(*mini_sample)
         self.trainer.train_step(states, actions, rewards, next_states, dones)
 
-    def train_short_memory(self, state, action, reward, next_state, done):
+    def train_short_memory(self, state: tuple, action: list, reward: int, next_state: tuple, done: bool):
         self.trainer.train_step(state, action, reward, next_state, done)
 
-    def get_action(self, state):
-        # random moves: tradeoff exploration / exploitation
-        self.epsilon = 1000 - self.n_games
+    def get_action(self, state: tuple) -> list:
         final_move = [0 for _ in range(9)]
-        if random.randint(0, 100) < self.epsilon:
-            moves = []
-            for v in range(9):
-                if state[v] == 0:
-                    moves.append(v)
-            final_move[random.choice(moves)] = 1
-        else:
-            state0 = torch.tensor(state, dtype=torch.float)
-            prediction = self.model(state0)
-            for imove, move in enumerate(prediction):
-                if state0[imove] != 0:
-                    prediction[imove] = 0
+        state0 = torch.tensor(state, dtype=torch.float)
+        prediction = self.model(state0)
 
-            move = torch.argmax(prediction).item()
-            final_move[move] = 1
+        for imove, move in enumerate(prediction):
+            if state0[imove] != 0:
+                prediction[imove] = 0
+
+        s = 0
+        total = sum(prediction)
+        r = random.random() * total
+        for move, value in enumerate(prediction):
+            if s <= r < s + value:
+                final_move[move] = 1
+                break
+            s += value
 
         return final_move
 
@@ -84,45 +80,40 @@ class Agent:
 def train():
     print("Init")
     shapes = (Shape.Cross, Shape.Circle)
-    agents = (Agent(), Agent())
-    total_reward = [0, 0]
-    best_reward = [0, 0]
-    game = Game()
-    print("Start")
+    ag1, ag2 = Agent(), Agent()
+    agents = (ag1, ag2)
+    epoch = 400
 
+    total_reward = [0, 0]
+    game = Game()
+    fill_at = 0
+
+    all_reward1 = []
+    all_reward2 = []
+    print("Start")
     done = False
     while True:
         for i_shape, shape in enumerate(shapes):
             agent = agents[i_shape]
-            # game.print_grid()
 
-            if agent is None:
-                game.play(random_move(game), shape)
-                continue
-
-            # get old state
             state_old = agent.get_state(game)
 
-            # get move
-            final_move = agent.get_action(state_old)
+            if agent is None or fill_at < MAX_MEMORY:
+                final_move = random_move(game)
 
-            # perform move and get new state
-            mi = 0
-            for i in range(1, len(final_move)):
-                if final_move[mi] < final_move[i]:
-                    mi = i
-            reward, done = game.play(mi, shape)
+            else:
+                final_move = agent.get_action(state_old)
+
+            reward, done = game.play(argmax(final_move), shape)
+
             state_new = agent.get_state(game)
-
-            # train short memory
             agent.train_short_memory(state_old, final_move, reward, state_new, done)
-
-            # remember
             agent.remember(state_old, final_move, reward, state_new, done)
 
             total_reward[i_shape] += reward
 
             if done:
+                fill_at += 1
                 break
 
         if done:
@@ -130,17 +121,32 @@ def train():
             game.reset()
 
             for i, agent in enumerate(agents):
-                agent.n_games += 1
+                if fill_at >= MAX_MEMORY:
+                    agent.n_games += 1
                 agent.train_long_memory()
 
-                if total_reward[i] > best_reward[i]:
-                    best_reward[i] = total_reward[i]
-                    agent.model.save(f"model{i}.pth")
+            print('Game', agents[0].n_games, 'Reward', total_reward)
 
-            print('Game', agents[0].n_games, 'Reward', total_reward, 'Best:', best_reward)
+            if ag1.n_games % 10 == 9:
+                if total_reward[0] > total_reward[1]:
+                    ag2 = deepcopy(ag1)
+                else:
+                    ag1 = deepcopy(ag2)
+
+            if random.randint(0, 1):
+                agents = ag2, ag1
+
+            all_reward1.append(total_reward[0])
+            all_reward2.append(total_reward[1])
             total_reward = [0, 0]
 
-        if agents[0].n_games > 2000:
+        if agents[0].n_games > epoch:
+            ag1.model.save(f"model_ag1.pth")
+            ag2.model.save(f"model_ag2.pth")
+
+            plt.plot(all_reward1, color="red")
+            plt.plot(all_reward2, color="blue")
+            plt.show()
             break
 
 
