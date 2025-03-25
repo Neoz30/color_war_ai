@@ -9,11 +9,11 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class Linear_QNet(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size, output_size):
         super().__init__()
-        self.input = nn.Linear(input_size, hidden_size)
-        self.middle = nn.Linear(hidden_size, hidden_size)
-        self.output = nn.Linear(hidden_size, output_size)
+        self.input = nn.Linear(input_size, 27)
+        self.middle = nn.Linear(27, 18)
+        self.output = nn.Linear(18, output_size)
         self.to(device)
 
     def forward(self, x):
@@ -22,13 +22,18 @@ class Linear_QNet(nn.Module):
         x = F.sigmoid(self.output(x))
         return x
 
-    def save(self, file_name='model_long1400.pth'):
+    def save(self, file_name: str):
         model_folder_path = './model'
         if not os.path.exists(model_folder_path):
             os.makedirs(model_folder_path)
 
         file_name = os.path.join(model_folder_path, file_name)
         torch.save(self.state_dict(), file_name)
+
+    def load(self, file_name):
+        model_folder_path = './model'
+        file_name = os.path.join(model_folder_path, file_name)
+        self.load_state_dict(torch.load(file_name))
 
 
 class QTrainer:

@@ -31,7 +31,7 @@ class Game:
             self.grid[i] = Shape.Empty
 
     def full(self):
-        return all([self.grid[i] != 0 for i in range(9)])
+        return all([self.grid[i] != Shape.Empty for i in range(9)])
 
     def empty_move(self) -> list:
         empty = []
@@ -56,58 +56,14 @@ class Game:
 
         return Shape.Empty
 
-    def missing1_opponent(self, shape: Shape) -> bool:
-        # Not fully working
-        for x in range(3):
-            c = 0
-            for offset in range(3):
-                value = self.grid[offset * self.row + x]
-                if value == shape:
-                    c = 0
-                    break
-                elif value != Shape.Empty:
-                    c += 1
-            if c >= 2:
-                return True
-
-        for y in range(3):
-            c = 0
-            for offset in range(3):
-                value = self.grid[y * self.row + offset]
-                if value == shape:
-                    c = 0
-                    break
-                elif value != Shape.Empty:
-                    c += 1
-            if c >= 2:
-                return True
-
-        c = 0
-        for offset in range(0, 9, 4):
-            value = self.grid[offset]
-            if value == shape:
-                c = 0
-                break
-            elif value != Shape.Empty:
-                c += 1
-        if c >= 2:
-            return True
-
-        c = 0
-        for offset in range(2, 7, 2):
-            value = self.grid[offset]
-            if value == shape:
-                c = 0
-                break
-            elif value != Shape.Empty:
-                c += 1
-        if c >= 2:
-            return True
-
-        return False
-
-    def win(self, shape: Shape):
-        return self.verify() == shape
+    def win_score(self, shape: Shape) -> int:
+        shape_win = self.verify()
+        if shape_win == Shape.Empty:
+            return 0
+        if shape_win == shape:
+            return 1
+        else:
+            return -1
 
     def play(self, action: int, shape: Shape) -> tuple:
         """
@@ -120,15 +76,11 @@ class Game:
         if self.grid[action] == Shape.Empty:
             self.grid[action] = shape
 
-        win = self.win(shape)
-        score = 0
-        if self.missing1_opponent(shape):
-            score = -1
-        if win:
-            score = 1
+        winner = self.verify()
+        if winner != Shape.Empty:
             game_over = True
 
         if self.full():
             game_over = True
 
-        return score, game_over
+        return 0, game_over
