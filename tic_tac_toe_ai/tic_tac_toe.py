@@ -11,7 +11,6 @@ class Shape(IntEnum):
 class Game:
     def __init__(self):
         self.grid = [Shape.Empty for _ in range(9)]
-        self.row = 3
 
     def copy(self) -> Game:
         copied = Game()
@@ -23,7 +22,7 @@ class Game:
         print()
         for i in range(9):
             print(('~', 'X', 'O')[self.grid[i]], end=" ")
-            if i % self.row == 2:
+            if i % 3 == 2:
                 print()
 
     def reset(self):
@@ -42,12 +41,12 @@ class Game:
 
     def verify(self) -> Shape:
         for x in range(3):
-            if self.grid[x] == self.grid[self.row + x] == self.grid[2 * self.row +x]:
+            if self.grid[x] == self.grid[3 + x] == self.grid[2 * 3 + x]:
                 return self.grid[x]
 
         for y in range(3):
-            if self.grid[y * self.row] == self.grid[y * self.row + 1] == self.grid[y * self.row + 2]:
-                return self.grid[y * self.row]
+            if self.grid[y * 3] == self.grid[y * 3 + 1] == self.grid[y * 3 + 2]:
+                return self.grid[y * 3]
 
         if self.grid[0] == self.grid[4] == self.grid[8]:
             return self.grid[0]
@@ -64,6 +63,85 @@ class Game:
             return 1
         else:
             return -1
+    
+    def stat_row(self, s: Shape, row: int) -> tuple:
+        e, c, o = 0, 0, 0
+        for x in range(3):
+            current = self.grid[3 * row + x]
+            if current == Shape.Empty:
+                e += 1
+            elif current == s:
+                c += 1
+            else:
+                o += 1
+        return e, c, o
+    
+    def stat_colum(self, s: Shape, colum: int) -> tuple:
+        e, c, o = 0, 0, 0
+        for y in range(3):
+            current = self.grid[3 * y + colum]
+            if current == Shape.Empty:
+                e += 1
+            elif current == s:
+                c += 1
+            else:
+                o += 1
+        return e, c, o
+    
+    def finish_line(self, s: Shape) -> int:
+        total = 0
+
+        for row in range(3):
+            e, c, o = self.stat_row(s, row)
+            if c < 2 and o < 2:
+                continue
+
+            if c > o:
+                total += 1
+            else:
+                total -= 1
+
+        for colum in range(3):
+            e, c, o = self.stat_row(s, colum)
+            if c < 2 and o < 2:
+                continue
+
+            if c > o:
+                total += 1
+            else:
+                total -= 1
+
+        e, c, o = 0, 0, 0
+        for pos in (0, 4, 8):
+            current = self.grid[pos]
+            if current == Shape.Empty:
+                e += 1
+            elif current == s:
+                c += 1
+            else:
+                o += 1
+        if c >= 2 or o >= 2:
+            if c > o:
+                total += 1
+            else:
+                total -= 1
+
+        e, c, o = 0, 0, 0
+        for pos in (2, 4, 6):
+            current = self.grid[pos]
+            if current == Shape.Empty:
+                e += 1
+            elif current == s:
+                c += 1
+            else:
+                o += 1
+        if c >= 2 or o >= 2:
+            if c > o:
+                total += 1
+            else:
+                total -= 1
+
+        return total
 
     def play(self, action: int, shape: Shape) -> tuple:
         """
@@ -83,4 +161,4 @@ class Game:
         if self.full():
             game_over = True
 
-        return 0, game_over
+        return self.finish_line(shape), game_over

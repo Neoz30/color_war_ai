@@ -1,14 +1,13 @@
 import torch
 import random
-import math
 from collections import deque
 from tic_tac_toe import Game, Shape
 from model import Linear_QNet, QTrainer
 import matplotlib.pyplot as plt
 
-MAX_MEMORY = 300
-BATCH_SIZE = 100
-LR = 0.05
+MAX_MEMORY = 800
+BATCH_SIZE = 200
+LR = 0.1
 
 
 def argmax(tab: tuple | list) -> int:
@@ -47,7 +46,7 @@ class Agent:
 
     def train_long_memory(self):
         if len(self.memory) < BATCH_SIZE:
-            mini_sample = self.memory
+            mini_sample = random.sample(self.memory, len(self.memory))
         else:
             mini_sample = random.sample(self.memory, BATCH_SIZE)
         states, actions, rewards, next_states, dones = zip(*mini_sample)
@@ -85,11 +84,11 @@ def train():
     print("Init")
     agent = Agent()
     partner = Agent()
-    agent.epsilon = 1
+    agent.epsilon = 0
 
-    epoch = 500
+    epoch = 2500
     total_reward = 0
-    hold_data = None
+    hold_data = []
     all_reward = []
 
     shapes = (Shape.Cross, Shape.Circle)
@@ -98,35 +97,19 @@ def train():
     print("Start")
 
     done = False
-    turn_error = 0
     while True:
         for player, shape in zip(players, shapes):
-            turn_error += 1
             state_old = agent.get_state(game)
-
             final_move = agent.get_action(state_old)
-
-            done = game.play(argmax(final_move), shape)[1]
-
+            reward, done = game.play(argmax(final_move), shape)
             state_new = agent.get_state(game)
+
+            hold_data.append([state_old, final_move, reward, state_new, done])
 
             if done:
                 break
 
-            if player is agent:
-                if hold_data is not None:
-                    hold_data[2] = 0
-                    agent.train_short_memory(*hold_data)
-                    agent.remember(*hold_data)
-
-                hold_data = [state_old, final_move, 0, state_new, done]
-
-            if turn_error > 9:
-                print("Error detected, turn:", turn_error)
-                game.print_grid()
-
         if done:
-            turn_error = 0
             game.print_grid()
 
             s = Shape.Empty
@@ -134,26 +117,31 @@ def train():
                 if player is agent:
                     s = shape
                     break
-            after_reward = game.win_score(s)
-            hold_data[2] = after_reward
-            total_reward += after_reward
 
-            agent.train_short_memory(*hold_data)
-            agent.remember(*hold_data)
-            hold_data = None
+            reward = game.win_score(s)
+            for data in reversed(hold_data):
+                data[2] += reward
+                reward /= 2
+
+                agent.train_short_memory(*data)
+                agent.remember(*data)
+
+                total_reward += data[2]
+            hold_data.clear()
 
             game.reset()
 
             agent.n_games += 1
             agent.train_long_memory()
-            agent.epsilon = 0.8 - (agent.n_games / epoch)
+            # agent.epsilon = 0.5 - (agent.n_games / epoch)
 
             print('Game:', agent.n_games, 'Reward:', total_reward, 'Shape:', s.name)
 
+            version = agent.n_games // (epoch // 20)
+            partner.model.load(f"model_{random.randint(0, version)}.pth")
+
             if agent.n_games % (epoch // 20) == 1:
-                version = agent.n_games // (epoch // 20)
                 agent.model.save(f"model_{version}.pth")
-                partner.model.load(f"model_{random.randint(0, version)}.pth")
 
             if random.randint(0, 1):
                 players = agent, partner
@@ -163,7 +151,7 @@ def train():
             all_reward.append(total_reward)
             total_reward = 0
 
-        if agent.n_games > epoch:
+        if agent.n_games >= epoch:
             agent.model.save(f"model_final.pth")
             avg_sample = [sum(all_reward[i: i + 10]) / 10 for i in range(0, len(all_reward) - 1, 10)]
 
