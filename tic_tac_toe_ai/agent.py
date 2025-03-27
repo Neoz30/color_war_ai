@@ -5,9 +5,9 @@ from tic_tac_toe import Game, Shape
 from model import Linear_QNet, QTrainer
 import matplotlib.pyplot as plt
 
-MAX_MEMORY = 800
-BATCH_SIZE = 200
-LR = 0.1
+MAX_MEMORY = 1000
+BATCH_SIZE = 250
+LR = 0.02
 
 
 def argmax(tab: tuple | list) -> int:
@@ -86,7 +86,7 @@ def train():
     partner = Agent()
     agent.epsilon = 0
 
-    epoch = 2500
+    epoch = 5000
     total_reward = 0
     hold_data = []
     all_reward = []
@@ -120,7 +120,7 @@ def train():
 
             reward = game.win_score(s)
             for data in reversed(hold_data):
-                data[2] += reward
+                # data[2] += reward
                 reward /= 2
 
                 agent.train_short_memory(*data)
@@ -133,7 +133,7 @@ def train():
 
             agent.n_games += 1
             agent.train_long_memory()
-            # agent.epsilon = 0.5 - (agent.n_games / epoch)
+            agent.epsilon = max(0, 0.65 - (agent.n_games / epoch))
 
             print('Game:', agent.n_games, 'Reward:', total_reward, 'Shape:', s.name)
 

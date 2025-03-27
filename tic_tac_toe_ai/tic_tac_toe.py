@@ -122,9 +122,13 @@ class Game:
                 o += 1
         if c >= 2 or o >= 2:
             if c > o:
-                total += 1
+                if o:
+                    total += 1
             else:
-                total -= 1
+                if c:
+                    total += 1
+                else:
+                    total -= 1
 
         e, c, o = 0, 0, 0
         for pos in (2, 4, 6):
@@ -153,12 +157,17 @@ class Game:
         game_over = False
         if self.grid[action] == Shape.Empty:
             self.grid[action] = shape
-
+        
         winner = self.verify()
+        win_reward = 0
         if winner != Shape.Empty:
             game_over = True
+            if winner == shape:
+                win_reward = 10
+            else:
+                win_reward = -10
 
         if self.full():
             game_over = True
 
-        return self.finish_line(shape), game_over
+        return self.finish_line(shape) + win_reward, game_over
