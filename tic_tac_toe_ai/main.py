@@ -1,63 +1,98 @@
-import torch
+from __future__ import annotations
 from tic_tac_toe import Game, Shape
-from agent import Agent
 import random
 
 
-def play_human() -> int:
-    pos = "a", "b"
-    while not (pos[0].isdigit() and pos[1].isdigit()):
-        r = input("Where you play ? (position)")
-        pos = r[0], r[3]
+class Player:
+    def __init__(self, game: Game, shape: Shape):
+        self.play_on = game
+        self.shape = shape
 
-    pos = int(pos[0]), int(pos[1])
-    return pos[0] + pos[1] * 3
+    def get_info(self):
+        pass
+
+    def play(self):
+        pass
 
 
-def play_AI(agent: Agent, game: Game) -> int:
-    moves = agent.get_action(
-        agent.get_state(game)
-    )
-    mi = 0
-    for i in range(1, len(moves)):
-        if moves[mi] < moves[i]:
-            mi = i
-    return mi
+class Human(Player):
+    def get_info(self):
+        for y in range(self.play_on.h):
+            for x in range(self.play_on.w):
+                shape = self.play_on.grid[y][x]
+                show = '~'
+                if shape == Shape.Cross:
+                    show = 'X'
+                if shape == Shape.Circle:
+                    show = 'O'
+                print(show, end=' ')
+            print()
+
+    def play(self):
+        x, y = '#', '#'
+        while not x.isdigit() or not y.isdigit():
+            text = input("Where you play ? (x, y)")
+            part = text.split()
+            if len(part) != 2:
+                continue
+            x, y = part
+
+        x, y = int(x), int(y)
+        self.play_on.play((x, y), self.shape)
+
+
+class MiniMax(Player):
+    def play(self):
+        base = self.play_on.copy()
+        points, move = self.search(base, self.shape)
+        self.play_on.play(move, self.shape)
+
+    def search(self, current: Game, shape: Shape) -> tuple:
+        other = Shape.Cross
+        if shape == Shape.Cross:
+            other = Shape.Circle
+
+        values = []
+        for y in range(self.play_on.h):
+            for x in range(self.play_on.w):
+                if current.grid[y][x] != Shape.Empty:
+                    continue
+
+                think = current.copy()
+                points, _ = think.play((x, y), shape)
+
+                if think.end:
+                    values.append((points, (x, y)))
+                    continue
+
+                values.append(self.search(think, other))
+
+        choose_value = values[0]
+        for value in values[1:]:
+            if value[0] > choose_value[0]:
+                choose_value = value
+
+        choose_value = -choose_value[0], choose_value[1]
+        return choose_value
 
 
 game = Game()
-shapes = (Shape.Cross, Shape.Circle)
+human = Human(game, Shape.Cross)
+players = [human, MiniMax(game, Shape.Circle)]
 
-ai = Agent()
-ai.model.load_state_dict(torch.load("model/model_final.pth"))
-human = None
-
-players = [human, ai]
 if random.randint(0, 1):
     players = players[1], players[0]
 
-game_over = False
-while True:
-    for i_sh, shape in enumerate(shapes):
-        player = players[i_sh]
-        game.print_grid()
+while not game.end:
+    for player in players:
+        player.get_info()
+        player.play()
 
-        if isinstance(player, Agent):
-            game_over = game.play(play_AI(player, game), shape)[1]
-        else:
-            pos = play_human()
-            while game.grid[pos] != Shape.Empty:
-                pos = play_human()
-            game_over = game.play(pos, shape)[1]
-
-        if game_over:
+        if game.end:
             break
 
-    if game_over:
-        game.print_grid()
-        winner = game.verify()
-        if winner == Shape.Empty:
-            print("Tie")
-        else:
-            print(winner.name, "win !")
-        break
+winner = game.verify()
+if winner == Shape.Empty:
+    print("Tie")
+else:
+    print(winner.name, "win !")
