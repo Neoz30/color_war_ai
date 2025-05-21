@@ -58,7 +58,9 @@ class Game:
 
         reward = 0
         winner = self.verify()
-        if winner != Shape.Empty or self.full():
+        if self.full():
+            self.end = True
+        if winner != Shape.Empty:
             self.end = True
 
             if winner == shape:
