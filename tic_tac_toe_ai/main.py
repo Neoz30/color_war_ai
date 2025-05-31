@@ -1,11 +1,12 @@
 from __future__ import annotations
 from tic_tac_toe import Game, Shape
+from time import time
 import random
 import math
 
 
 class Player:
-    def __init__(self, game: Game, shape: Shape):
+    def __init__(self, game: Game, shape: int):
         self.play_on = game
         self.shape = shape
 
@@ -18,8 +19,8 @@ class Player:
 
 class Human(Player):
     def get_info(self):
-        for y in range(self.play_on.h):
-            for x in range(self.play_on.w):
+        for y in range(self.play_on.size):
+            for x in range(self.play_on.size):
                 shape = self.play_on.grid[y][x]
                 show = '~'
                 if shape == Shape.Cross:
@@ -44,100 +45,87 @@ class Human(Player):
 
 class MiniMax(Player):
     def play(self):
-        other = Shape.Cross
-        if self.shape == Shape.Cross:
-            other = Shape.Circle
+        start = time()
+        moves = self.search(self.play_on, self.shape, 0)
+        think_time = round(time() - start, 3) * 1000
 
-        values: list[list[int | None]] = []
-        for y in range(self.play_on.h):
-            values.append([])
-            for x in range(self.play_on.w):
-                values[y].append(None)
-
-                if self.play_on.grid[y][x] != Shape.Empty:
+        best_trust = -math.inf
+        best_moves = []
+        for y in range(self.play_on.size):
+            for x in range(self.play_on.size):
+                trust = moves[y][x]
+                if trust > best_trust:
+                    best_trust = trust
+                    best_moves = [(x, y)]
                     continue
 
-                think = self.play_on.copy()
-                points, _ = think.play((x, y), self.shape)
+                if trust == best_trust:
+                    best_moves.append((x, y))
 
-                if think.end:
-                    values[y][x] = points
-                    continue
+        self.play_on.play(random.choice(best_moves), self.shape)
 
-                values[y][x] = -self.search(think, other, 1)
+        print(moves, f"think in {think_time} msec")
 
-        print(values)
-
-        best_value = -math.inf
-        best_move = None
-        for y in range(self.play_on.h):
-            for x in range(self.play_on.w):
-                value = values[y][x]
-                if value is None:
-                    continue
-                if value == best_value and random.randint(0, 1):
-                    best_value = value
-                    best_move = (x, y)
-                elif value > best_value:
-                    best_value = value
-                    best_move = (x, y)
-
-        self.play_on.play(best_move, self.shape)
-
-    def search(self, current: Game, shape: Shape, depth: int) -> float:
+    def search(self, current: Game, shape: int, depth: int) -> list[list[float]]:
         other = Shape.Cross
         if shape == Shape.Cross:
             other = Shape.Circle
 
-        values: list[list[int | None]] = []
-        for y in range(self.play_on.h):
+        values: list[list[float]] = []
+        for y in range(self.play_on.size):
             values.append([])
-            for x in range(self.play_on.w):
-                values[y].append(None)
+            for x in range(self.play_on.size):
+                if shape == self.shape:
+                    values[y].append(-math.inf)
+                else:
+                    values[y].append(math.inf)
 
                 if current.grid[y][x] != Shape.Empty:
                     continue
 
                 think = current.copy()
-                points, _ = think.play((x, y), shape)
+                think.play((x, y), shape)
 
                 if think.end:
+                    if think.winner == self.shape:
+                        points = 1
+                    elif think.winner == Shape.Empty:
+                        points = 0
+                    else:
+                        points = -1
+
                     values[y][x] = points
-                    continue
+                else:
+                    moves = self.search(think, other, depth + 1)
+                    if shape != self.shape:
+                        value = max([max(l) for l in moves])
+                    else:
+                        value = min([min(l) for l in moves])
+                    values[y][x] = value
 
-                values[y][x] = -self.search(think, other, depth + 1)
+        return values
 
-        if depth == 0: print(values)
+game = Game()
 
-        choose_value = -math.inf
-        for row in values:
-            for value in row:
-                if value is None:
-                    continue
-                if value > choose_value:
-                    choose_value = value
+human = Human(game, Shape.Cross)
+players = [MiniMax(game, Shape.Cross), MiniMax(game, Shape.Circle)]
 
-        return choose_value
+if random.randint(0, 1):
+    players = players[1], players[0]
 
-for party in range(10):
-    game = Game()
-    human = Human(game, Shape.Cross)
-    players = [MiniMax(game, Shape.Cross), MiniMax(game, Shape.Circle)]
+while not game.end:
+    for player in players:
+        player.get_info()
+        player.play()
+        human.get_info()
 
-    if random.randint(0, 1):
-        players = players[1], players[0]
+        if game.end:
+            break
 
-    while not game.end:
-        for player in players:
-            player.get_info()
-            player.play()
-            human.get_info()
-
-            if game.end:
-                break
-
-    winner = game.verify()
-    if winner == Shape.Empty:
+match game.winner:
+    case Shape.Empty:
         print("Tie")
-    else:
-        print(winner.name, "win !")
+    case Shape.Cross:
+        print("Cross Win !")
+    case Shape.Circle:
+        print("Circle Win !")
