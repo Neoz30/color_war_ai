@@ -64,7 +64,7 @@ class MiniMax(Player):
 
         self.play_on.play(random.choice(best_moves), self.shape)
 
-        print(moves, f"think in {think_time} msec")
+        #print(moves, f"Minimax think in {think_time} msec")
 
     def search(self, current: Game, shape: int, depth: int) -> list[list[float]]:
         other = Shape.Cross
@@ -86,7 +86,7 @@ class MiniMax(Player):
                 think = current.copy()
                 think.play((x, y), shape)
 
-                if think.end:
+                if think.end or depth >= 4:
                     if think.winner == self.shape:
                         points = 1
                     elif think.winner == Shape.Empty:
@@ -105,10 +105,125 @@ class MiniMax(Player):
 
         return values
 
+class Qlearning(Player):
+    def __init__(self, game: Game, shape: int):
+        super().__init__(game, shape)
+
+        self.alpha = 0.1
+        self.gamma = 0.9
+        self.epsilon = 0.1
+        self.vtable = {}
+
+    def to1dgame(self, game: Game) -> tuple:
+        return tuple(game.grid[i // game.size][i % game.size] for i in range(game.size**2))
+
+    def evaluation(self, state) -> float:
+        return self.vtable.get(state, 0)
+
+    def update_vtable(self, state, reward, next_state):
+        changes = self.alpha * (reward + self.gamma * self.vtable.get(next_state, 0) - self.vtable.get(state, 0))
+        if state not in self.vtable:
+            self.vtable[state] = changes
+            return
+        self.vtable[state] += changes
+
+    def train(self):
+        asigned_game = self.play_on
+        asigned_shape = self.shape
+        self.shape = Shape.Cross
+
+        for episode in range(4000):
+            print(episode)
+            self.play_on = Game()
+            opponent = MiniMax(self.play_on, Shape.Circle)
+
+            if random.randint(0, 1):
+                opponent.play()
+
+            while not self.play_on.end:
+                state = self.to1dgame(self.play_on)
+                self.play()
+
+                reward = 0
+                if self.play_on.winner != Shape.Empty:
+                    if self.play_on.winner == self.shape:
+                        reward = 1
+                    else:
+                        reawrd = -1
+
+                next_state = self.to1dgame(self.play_on)
+                self.update_vtable(state, reward, next_state)
+
+                if not self.play_on.end:
+                    opponent.play()
+
+        self.play_on = asigned_game
+        self.shape = asigned_shape
+
+    def play(self):
+        start = time()
+        moves = self.search(self.play_on, self.shape, 0)
+        think_time = round(time() - start, 3) * 1000
+
+        best_trust = -math.inf
+        best_moves = []
+        for y in range(self.play_on.size):
+            for x in range(self.play_on.size):
+                trust = moves[y][x]
+                if trust > best_trust:
+                    best_trust = trust
+                    best_moves = [(x, y)]
+                    continue
+
+                if trust == best_trust:
+                    best_moves.append((x, y))
+
+        self.play_on.play(random.choice(best_moves), self.shape)
+
+        #print(moves, f"Qlearning think in {think_time} msec")
+
+    def search(self, current: Game, shape: int, depth: int) -> list[list[float]]:
+        other = Shape.Cross
+        if shape == Shape.Cross:
+            other = Shape.Circle
+
+        values: list[list[float]] = []
+        for y in range(self.play_on.size):
+            values.append([])
+            for x in range(self.play_on.size):
+                if shape == self.shape:
+                    values[y].append(-math.inf)
+                else:
+                    values[y].append(math.inf)
+
+                if current.grid[y][x] != Shape.Empty:
+                    continue
+
+                think = current.copy()
+                think.play((x, y), shape)
+
+                if think.end or depth >= 4:
+                    values[y][x] = self.evaluation(self.to1dgame(think))
+                else:
+                    moves = self.search(think, other, depth + 1)
+                    if shape != self.shape:
+                        value = max([max(l) for l in moves])
+                    else:
+                        value = min([min(l) for l in moves])
+                    values[y][x] = value
+
+        return values
+
 game = Game()
 
 human = Human(game, Shape.Cross)
-players = [MiniMax(game, Shape.Cross), MiniMax(game, Shape.Circle)]
+qlearning = Qlearning(game, Shape.Circle)
+
+qlearning.train()
+with open("V-table.txt", 'x') as file:
+    file.write(str(qlearning.vtable))
+
+players = [human, qlearning]
 
 if random.randint(0, 1):
     players = players[1], players[0]
