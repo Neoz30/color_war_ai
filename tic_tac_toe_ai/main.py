@@ -132,7 +132,7 @@ class Qlearning(Player):
         asigned_shape = self.shape
         self.shape = Shape.Cross
 
-        for episode in range(4000):
+        for episode in range(18000):
             print(episode)
             self.play_on = Game()
             opponent = MiniMax(self.play_on, Shape.Circle)
@@ -142,14 +142,14 @@ class Qlearning(Player):
 
             while not self.play_on.end:
                 state = self.to1dgame(self.play_on)
-                self.play()
+                self.play_short()
 
                 reward = 0
                 if self.play_on.winner != Shape.Empty:
                     if self.play_on.winner == self.shape:
                         reward = 1
                     else:
-                        reawrd = -1
+                        reward = -1
 
                 next_state = self.to1dgame(self.play_on)
                 self.update_vtable(state, reward, next_state)
@@ -159,6 +159,25 @@ class Qlearning(Player):
 
         self.play_on = asigned_game
         self.shape = asigned_shape
+
+    def play_short(self):
+        s = self.play_on.size
+        actions = [(i % s, i // s) for i in range(s**2) if self.play_on.grid[i // s][i % s] == Shape.Empty]
+
+        if random.random() <= self.epsilon:
+            self.play_on.play(random.choice(actions), self.shape)
+            return
+
+        best = actions[0]
+        best_value = -math.inf
+        for a in actions:
+            think = self.play_on.copy()
+            think.play(a, self.shape)
+            v = self.vtable.get(self.to1dgame(think), 0.0)
+            if v > best_value:
+                best = a
+                best_value = v
+        self.play_on.play(best, self.shape)
 
     def play(self):
         start = time()
